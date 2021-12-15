@@ -1,107 +1,127 @@
 import json
-
-def readJson(file: str) -> dict:
-    x = open(file, 'r', encoding='utf-8')
-    y = json.load(x)
-    return y
-
-def saveJson() -> None:
-    json_f['previous'] = selected
-    with open(conf_f, 'w', encoding='utf-8') as f:
-        json.dump(json_f, f)
-        f.close()
-
-
-conf_f = "conf.json" # path to conf.json
-json_f = readJson(conf_f)
-
-# -----------------------------
-
-import pyperclip # install with pip 
+import pyperclip
 from tkinter import (
     Tk,
+    Label,
     Entry,
-    Label
+    messagebox as mb
 )
 
-# import converter modules here
+# converters
 import binary_calculator as bc
 import ipv4_calculator as ipc
 from random import randint
 
-def exitProgram() -> None:
-    saveJson()
-    exit(root.destroy())
 
-def returnPressed(inp) -> None:
-    try:
-        pyperclip.copy(eval(selected[0][selected[1]][1].format(entry.get())))
-    except:
-        pyperclip.copy("ERROR")
-    exitProgram()
+class Node:
+    def __init__(self, parent=None, title=None, function=None) -> None:
+        self.title = title
+        self.function = function
 
-def keyPressed(inp) -> None:
-    inp = inp.keysym
-    global selected, selectable_range
-    if inp == 'Left':
-        selected = [json_f['converts'], selected[2], selected[2]]
-        selectable_range = len(modes)
+        self.parent = parent
+        self.children = []
 
-    elif inp == 'Right':
-        if selected[0] != json_f['converts']: return
-        selected[2] = selected[1]
-        selectable_range = len(json_f['converts'][modes[selected[1]]])
-        selected = [json_f['converts'][modes[selected[1]]], 0, selected[2]]
-
-    elif inp == 'Up':
-        if selected[1] <= 0: return
-        selected[1] -= 1
-
-    elif inp == 'Down':
-        if selected[1] >= selectable_range - 1: return
-        selected[1] += 1
-
-    elif inp == 'Escape':
-        exitProgram()
-
-    else:
-        return
-
-    updateLabel()
-
-def updateLabel() -> None:
-    show = []
-    try:
-        for i in selected[0].keys(): show.append(i)
-    except:
-        for i in selected[0]: show.append(i[0])
-
-    label.configure(text=show[selected[1]])
+    def addChildNode(self, title=None, function=None):
+        self.children.append(self, title, function)
 
 
-json_root = json_f['converts']
-selected = json_f['previous']
-modes = []
-for i in json_f['converts'].keys():
-    modes.append(i)
-selectable_range = len(json_f['converts'][modes[selected[2]]])
+class Window(Tk):
+    def __init__(self, file: str) -> None:
+        super().__init__()
 
-root = Tk()
-root.bind('<Key>', keyPressed)
-root.attributes('-topmost', True)
-root.overrideredirect(True)
+        self.attributes('-topmost', True)
+        self.overrideredirect(True)
+        size = (60, 40)
+        curpos = (self.winfo_pointerx() -
+                  round(size[0] / 2), self.winfo_pointery() - round(size[1] / 1.3))
+        self.geometry("{}x{}+{}+{}".format(*size, *curpos))
 
-size = (60, 40)
-curpos = (root.winfo_pointerx() - round(size[0] / 2), root.winfo_pointery() - round(size[1] / 1.3))
-root.geometry("{}x{}+{}+{}".format(*size, *curpos))
+        self.file = file
+        self.data = self.loadJson()
+        self.root = self.build(None, 'converts', self.data['converts'])
+        self.selected = self.root
+        self.bind('<Key>', self.tranverse)
+        self.bind('<Return>', self.use)
 
-label = Label(root)
-updateLabel()
-label.pack(side='top')
+        self.label = Label(text=self.selected.title)
+        self.entry = Entry()
 
-entry = Entry(root)
-entry.bind('<Return>', returnPressed)
-entry.pack(side='top')
+        self.label.pack(side='top')
+        self.entry.pack(side='top')
+
+    def use(self, inp=None) -> None:
+        if isinstance(self.selected.function, str):
+            try:
+                e = self.selected.function.format(self.entry.get())
+                pyperclip.copy(eval(e))
+            except:
+                mb.showerror(
+                    'Error', f'There was an error when trying "{self.selected.title}" with "{self.entry.get()}"')
+                pyperclip.copy('')
+            self.destroy()
+
+    def updateSelected(self):
+        self.label.configure(text=self.selected.title)
+
+    def tranverse(self, inp) -> Node:
+        if inp.keysym == "Left":
+            if self.selected.parent != None:
+                self.selected = self.selected.parent
+
+        elif inp.keysym == "Right":
+            if len(self.selected.children):
+                self.selected = self.selected.children[0]
+
+        elif inp.keysym == "Up":
+            if self.selected.parent != None:
+                temp = self.selected.parent
+                selectedindex = temp.children.index(self.selected) - 1
+                if selectedindex < 0:
+                    self.selected = temp.children[len(temp.children) - 1]
+                else:
+                    self.selected = temp.children[selectedindex]
+
+        elif inp.keysym == "Down":
+            if self.selected.parent != None:
+                temp = self.selected.parent
+                selectedindex = temp.children.index(self.selected) + 1
+                if selectedindex > len(temp.children) - 1:
+                    self.selected = temp.children[0]
+                else:
+                    self.selected = temp.children[selectedindex]
+
+        self.updateSelected()
+
+    def build(self, parent: Node, title: str, function) -> Node:
+        if isinstance(function, (dict, list)):
+            temp = Node(parent, title)
+            if parent != None:
+                parent.children.append(temp)
+            if isinstance(function, dict):
+                for k, v in function.items():
+                    self.build(temp, k, v)
+            else:
+                for l in function:
+                    self.build(temp, l[0], l[1])
+            return temp
+        else:
+            parent.children.append(Node(parent, title, function))
+
+    def saveJson(self):
+        self.data['previous'] = self.selected.title
+
+        with open(self.file, 'w', encoding='utf-8') as j:
+            json.dump(self.data, j)
+
+    def loadJson(self):
+        with open(self.file, 'r', encoding='utf-8') as j:
+            return json.load(j)
 
 
-root.mainloop()
+def main():
+    window = Window('conf.json')
+    window.mainloop()
+
+
+if __name__ == "__main__":
+    main()
