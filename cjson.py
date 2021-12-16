@@ -39,11 +39,7 @@ ordb = {
         ]
     },
 
-    'previous': [
-        'convert',
-        0,
-        0
-    ]
+    'previous': "converts"
 }
 with open('conf.json', 'w', encoding='UTF-8') as f:
     jdump(ordb, f)

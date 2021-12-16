@@ -39,7 +39,9 @@ class Window(Tk):
         self.file = file
         self.data = self.loadJson()
         self.root = self.build(None, 'converts', self.data['converts'])
-        self.selected = self.root
+        self.selected = self.setSelected(self.data['previous'], self.root)
+        if not self.selected:
+            self.selected = self.root
         self.bind('<Key>', self.tranverse)
         self.bind('<Return>', self.use)
 
@@ -54,14 +56,30 @@ class Window(Tk):
             try:
                 e = self.selected.function.format(self.entry.get())
                 pyperclip.copy(eval(e))
+                self.saveJson()
             except:
                 mb.showerror(
                     'Error', f'There was an error when trying "{self.selected.title}" with "{self.entry.get()}"')
                 pyperclip.copy('')
             self.destroy()
 
-    def updateSelected(self):
+    def updateSelected(self) -> None:
         self.label.configure(text=self.selected.title)
+
+    def setSelected(self, title: str, node: Node) -> Node:
+        if node.title == title:
+            return node
+        elif len(node.children):
+            results = []
+            for child in node.children:
+                results.append(self.setSelected(title, child))
+
+            results = list(set(results))
+            if len(results) > 1:
+                results.remove(None)
+                return results[0]
+        else:
+            return None
 
     def tranverse(self, inp) -> Node:
         if inp.keysym == "Left":
@@ -111,7 +129,7 @@ class Window(Tk):
         self.data['previous'] = self.selected.title
 
         with open(self.file, 'w', encoding='utf-8') as j:
-            json.dump(self.data, j)
+            json.dump(self.data, j, indent=3)
 
     def loadJson(self):
         with open(self.file, 'r', encoding='utf-8') as j:
